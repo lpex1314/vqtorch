@@ -42,7 +42,7 @@ class SimpleVQClassifier(nn.Module):
         return x, vq_dict
 
 
-def train(model, train_loader, train_iterations=1000, alpha=10):
+def train(model, train_loader, train_iterations=1000, alpha=10, ignore_commitment_loss=False):
     def iterate_dataset(data_loader):
         data_iter = iter(data_loader)
         while True:
@@ -62,7 +62,10 @@ def train(model, train_loader, train_iterations=1000, alpha=10):
         sce_loss = criterion(out, y)
         cmt_loss = vq_out['loss']
         acc = (out.argmax(dim=1) == y).float().mean()
-        (sce_loss + alpha * cmt_loss).backward()
+        if ignore_commitment_loss:
+            sce_loss.backward()
+        else:
+            (sce_loss + alpha * cmt_loss).backward()
 
         opt.step()
         pbar.set_description(f'sce loss: {sce_loss.item():.3f} | ' + \
@@ -73,8 +76,8 @@ def train(model, train_loader, train_iterations=1000, alpha=10):
 
 
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-train_dataset = DataLoader(datasets.MNIST(root='~/data/mnist', train=True, download=True, transform=transform),
-                           batch_size=256, shuffle=True)
+train_dataset = DataLoader(datasets.MNIST(root='/root/autodl-tmp/mnist/', train=True, download=True,
+                                          transform=transform), batch_size=256, shuffle=True)
 
 print('baseline')
 torch.random.manual_seed(seed)
@@ -97,5 +100,19 @@ train(model, train_dataset, train_iterations=train_iter)
 print('+ affine parameterization')
 torch.random.manual_seed(seed)
 model = SimpleVQClassifier(num_codes=num_codes, kmeans_init=True, sync_nu=1.0, affine_lr=10).cuda()
+opt = torch.optim.AdamW(model.parameters(), lr=lr)
+train(model, train_dataset, train_iterations=train_iter)
+
+print('+ soft discretization')
+torch.random.manual_seed(seed)
+model = SimpleVQClassifier(num_codes=num_codes, kmeans_init=True, soft_discretization=True, gamma=0.2,
+                           gamma_lr=0.002).cuda()
+opt = torch.optim.AdamW(model.parameters(), lr=lr)
+train(model, train_dataset, train_iterations=train_iter)
+
+print('+ soft cluster assignment')
+torch.random.manual_seed(seed)
+model = SimpleVQClassifier(num_codes=num_codes, kmeans_init=True, soft_discretization_enabled=False, gamma=0.2,
+                           gamma_lr=0.002, soft_cluster_assignment=True, delta=0.2, delta_lr=0.002).cuda()
 opt = torch.optim.AdamW(model.parameters(), lr=lr)
 train(model, train_dataset, train_iterations=train_iter)
