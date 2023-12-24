@@ -38,8 +38,9 @@ class SoftVectorQuant(_VQBaseLayer):
         beta: float = 0.95,
         use_sd: bool = True,
         gamma: float = 0.0,
-        use_sca=True,
-        learnable_delta=True,
+        gamma_decay: float = 0.0,
+        use_sca: bool = True,
+        learnable_delta: bool = True,
         init_delta: float = 0.0,
         delta_decay: float = 0.0,
         inplace_optimizer: torch.optim.Optimizer = None,
@@ -61,6 +62,7 @@ class SoftVectorQuant(_VQBaseLayer):
 
         if self.use_sd:
             self.gamma = gamma
+            self.gamma_decay = gamma_decay
 
         if inplace_optimizer is not None:
             if beta != 1.0:
@@ -102,11 +104,11 @@ class SoftVectorQuant(_VQBaseLayer):
         z_shape = z.shape[:-1]
         z_flat = z.view(z.size(0), -1, z.size(-1))
 
-        print("yoyo", codebook.requires_grad)
+        # print("yoyo", codebook.requires_grad)
 
-        if self.use_sca:
+        if self.use_sca and self.training:
             codebook = self.sca(codebook)
-            print(codebook.requires_grad)
+            # print(codebook.requires_grad)
 
         with torch.no_grad():
             dist_out = self.dist_fn(
@@ -114,7 +116,7 @@ class SoftVectorQuant(_VQBaseLayer):
                 codebook=codebook,
                 topk=self.topk,
                 compute_chunk_size=self.cdist_chunk_size,
-                half_precision=(z.is_cuda),
+                half_precision=z.is_cuda,
             )
 
             d = dist_out["d"].view(z_shape)
@@ -122,8 +124,10 @@ class SoftVectorQuant(_VQBaseLayer):
 
         z_q = F.embedding(q, codebook)
 
-        if self.use_sd:
-            z_q = (1 - self.gamma) * z_q + self.gamma * z_flat
+        if self.use_sd and self.training:
+            if self.gamma > 0:
+                z_q = (1 - self.gamma) * z_q + self.gamma * z
+                self.gamma -= self.gamma * self.gamma_decay
 
         if self.training and hasattr(self, "inplace_codebook_optimizer"):
             # update codebook inplace

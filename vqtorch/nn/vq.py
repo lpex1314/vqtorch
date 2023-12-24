@@ -39,12 +39,12 @@ class VectorQuant(_VQBaseLayer):
             affine_groups: int = 1,
             replace_freq: int = 0,
             inplace_optimizer: torch.optim.Optimizer = None,
-            soft_discretization: bool = False,
-            gamma: float = 0.0,
-            gamma_lr: float = 0.0,
-            soft_cluster_assignment: bool = False,
-            delta: float = 0.0,
-            delta_lr: float = 0.0,
+            # soft_discretization: bool = False,
+            # gamma: float = 0.0,
+            # gamma_lr: float = 0.0,
+            # soft_cluster_assignment: bool = False,
+            # delta: float = 0.0,
+            # delta_lr: float = 0.0,
             **kwargs,
     ):
 
@@ -64,12 +64,13 @@ class VectorQuant(_VQBaseLayer):
                 raise ValueError('inplace_optimizer can only be used with beta=1.0')
             self.inplace_codebook_optimizer = inplace_optimizer(self.codebook.parameters())
 
-        self.soft_discretization = soft_discretization
-        self.gamma = gamma
-        self.gamma_lr = gamma_lr
+        # self.soft_discretization = soft_discretization
+        # self.gamma = gamma
+        # self.gamma_lr = gamma_lr
+        #
+        # if soft_cluster_assignment:
+        #     self.soft_cluster_assignment = SoftClustering(delta=delta, lr=delta_lr)
 
-        if soft_cluster_assignment:
-            self.soft_cluster_assignment = SoftClustering(delta=delta, lr=delta_lr)
         if affine_lr > 0:
             # defaults to using learnable affine parameters
             self.affine_transform = AffineTransform(
@@ -125,24 +126,24 @@ class VectorQuant(_VQBaseLayer):
             q = dist_out['q'].view(z_shape).long()
 
         z_q = F.embedding(q, codebook)
-        # SD and SCA
-        if self.training:
-            if self.soft_discretization and hasattr(self, 'soft_cluster_assignment'):
-                self.soft_cluster_assignment.update_sim_matrix(self.codebook.weight.data)
-                weighted_sum = self.soft_cluster_assignment.compute_weighted_sum(self.codebook.weight.data)
-                z_q = (1 - self.gamma) * z_q + self.soft_cluster_assignment.delta * weighted_sum + self.gamma * z_flat
-                self.soft_cluster_assignment.update_delta()
-                self.gamma -= self.gamma * self.gamma_lr
-
-            elif self.soft_discretization:
-                z_q = (1 - self.gamma) * z_q + self.gamma * z_flat
-                self.gamma -= self.gamma * self.gamma_lr
-
-            elif self.soft_cluster_assignment:
-                self.soft_cluster_assignment.update_sim_matrix(self.codebook.weight.data)
-                weighted_sum = self.soft_cluster_assignment.compute_weighted_sum(self.codebook.weight.data)
-                z_q = (1 - self.gamma) * z_q + self.soft_cluster_assignment.delta * weighted_sum + self.gamma * z_flat
-                self.soft_cluster_assignment.update_delta()
+        # # SD and SCA
+        # if self.training:
+        #     if self.soft_discretization and hasattr(self, 'soft_cluster_assignment'):
+        #         self.soft_cluster_assignment.update_sim_matrix(self.codebook.weight.data)
+        #         weighted_sum = self.soft_cluster_assignment.compute_weighted_sum(self.codebook.weight.data)
+        #         z_q = (1 - self.gamma) * z_q + self.soft_cluster_assignment.delta * weighted_sum + self.gamma * z_flat
+        #         self.soft_cluster_assignment.update_delta()
+        #         self.gamma -= self.gamma * self.gamma_lr
+        #
+        #     elif self.soft_discretization:
+        #         z_q = (1 - self.gamma) * z_q + self.gamma * z_flat
+        #         self.gamma -= self.gamma * self.gamma_lr
+        #
+        #     elif self.soft_cluster_assignment:
+        #         self.soft_cluster_assignment.update_sim_matrix(self.codebook.weight.data)
+        #         weighted_sum = self.soft_cluster_assignment.compute_weighted_sum(self.codebook.weight.data)
+        #         z_q = (1 - self.gamma) * z_q + self.soft_cluster_assignment.delta * weighted_sum + self.gamma * z_flat
+        #         self.soft_cluster_assignment.update_delta()
 
         if self.training and hasattr(self, 'inplace_codebook_optimizer'):
             # update codebook inplace

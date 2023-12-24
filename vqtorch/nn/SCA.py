@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class SoftClustering(nn.Module):
-    def __init__(self, learnable_delta=True, delta=0.2, delta_decay=0.0):
+    def __init__(self, learnable_delta=True, delta=0.1, delta_decay=0.0):
         """
         Initialize the SoftClustering class.
 
@@ -28,7 +28,6 @@ class SoftClustering(nn.Module):
 
     def _compute_similarity(self, v1, v2):
         distances = torch.norm(v1 - v2, p=2, dim=2)
-        # similarity = torch.exp(1.0 / (distances + self.epsilon))
         similarity = torch.exp(-distances)
         return similarity
 
